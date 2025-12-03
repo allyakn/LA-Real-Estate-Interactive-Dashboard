@@ -1,0 +1,77 @@
+# Import python packages
+import streamlit as st
+from snowflake.snowpark.context import get_active_session
+import pandas as pd
+import numpy as np
+
+session = get_active_session()
+@st.cache_data
+def obtain_data():
+    permits = session.sql('''
+    select pcis_permit_num, status, status_date, year(status_date) as status_year,
+    permit_type, permit_sub_type, initiating_office, issue_date, year(issue_date) as issue_year, concat(address_start,' ',coalesce(street_direction,''), street_name,' ',street_suffix,' ',coalesce(suffix_direction,'')) as address,zip_code,work_description,ai_description,valuation,license_num,
+    contractor_business_name,license_type,census_tract,latitude_longitude
+    from la_permit_data.public.permit_records;
+    ''').to_pandas()
+    permits['ISSUE_DATE']=pd.to_datetime(permits['ISSUE_DATE'])
+    permits['VALUATION']=pd.to_numeric(permits['VALUATION'].str.replace(r'[$,]','',regex=True))
+    permits[['LONGITUDE','LATITUDE']]=permits['LATITUDE_LONGITUDE']\
+                                    .str.extract(r'\(([^\s]+)\s([^\s]+)\)')
+    permits['LONGITUDE']=pd.to_numeric(permits['LONGITUDE'])
+    permits['LATITUDE']=pd.to_numeric(permits['LATITUDE'])
+    permits['DAYS_ELAPSED']=(permits['STATUS_DATE']-permits['ISSUE_DATE']).dt.days
+    permits.loc[permits['STATUS']=='Issued', 'DAYS_ELAPSED']=np.nan
+    return permits
+permits=obtain_data()
+
+# Convert into the proper data types
+date0=permits['ISSUE_YEAR'].min()
+date1=permits['ISSUE_YEAR'].max()
+options={}
+filters=['PERMIT_TYPE', 'PERMIT_SUB_TYPE', 'ZIP_CODE']
+for col in filters:
+    options[col] = permits[col].value_counts().index
+
+# Create sidebar & filter
+st.sidebar.header('Filter')
+min_year, max_year = st.sidebar.slider('Issue Year Range', date0, date1, value=(date0,date1))
+values = {}
+for col in filters:
+    values[col] = st.sidebar.multiselect(col.title(), options=options[col])
+
+# Apply filters
+def filter_data(min_year, max_year, values):
+    df = permits[permits['ISSUE_YEAR'].between(min_year, max_year)]
+    for col in filters:
+        if len(values[col]) > 0:
+            df = df[df[col].isin(values[col])]
+    return df
+
+df = filter_data(min_year, max_year, values)
+
+# Dashboard Layout
+st.set_page_config(layout='wide')
+st.title('LA Real Estate Dashboard')
+st.write('Identifying market trends and high-value luxury neighborhoods')
+
+# Data for Graph 1
+time = df.groupby(pd.Grouper(key='ISSUE_DATE', freq='M'))['PCIS_PERMIT_NUM'].count()
+
+# Data for Graph 2
+top10 = df.groupby('ZIP_CODE')['VALUATION'].mean().sort_values(ascending=False).head(10)
+
+col1,col2=st.columns(2)
+
+# Graph 1
+with col1:
+    st.metric('Total Capital Invested', f"${df['VALUATION'].sum():,.2f}")
+    st.subheader('Market Trends')
+    st.line_chart(time,height=200)
+    st.caption('Shows the volume of renovation activity over time')
+
+# Graph 2
+with col2:
+    st.metric('Average Valuation', f"${df['VALUATION'].mean():,.2f}")
+    st.subheader('Top 10 High-Value Zip Codes for Renovations')
+    st.bar_chart(top10, height=200)
+    st.caption('Displayed are Zip Codes with the highest average renovation budgets')
