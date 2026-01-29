@@ -1,7 +1,7 @@
 # Los Angeles Renovation Permit Analysis & Dashboard
 
 This project examines Los Angeles building permit data to uncover patterns in renovation activity across neighborhoods and over time.  
-The objective is to translate permit records into practical insights that help identify **active renovation markets**, **timing trends**, and **areas associated with higher renovation investment levels**.
+The objective is to translate permit records into practical insights that help identify active renovation markets, timing trends and areas associated with higher renovation investment levels
 
 ## 📊 Overview
 
@@ -75,7 +75,6 @@ This project focuses on answering the following questions:
 
 - **Data Pipeline:** `Data-Pipeline.ipynb`  
 - **Interactive Dashboard:** `LA-Dashboard.png`  
-- **Supporting Analysis & Report:** `docs/report.pdf`  
 
 ## 🔮 Future Enhancements
 
